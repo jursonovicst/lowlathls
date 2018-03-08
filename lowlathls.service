@@ -1,0 +1,79 @@
+[Unit]
+Description =  Low Latency HLS Sample Stream
+After = network.target
+
+
+[Service]
+Environment = INPUT=input/big_buck_bunny_1080p_h264.mov NAME=lowlathls DST=output
+
+WorkingDirectory = /home/cdn/lowlathls
+
+ExecStart = /usr/local/bin/ffmpeg -nostats \
+  -re -stream_loop -1 \
+  -c:v h264_cuvid -i $INPUT \
+  -filter_complex "[0:v]split=2[in1][in2];[in1]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=36:fontcolor=yellow:y=150:box=1:boxcolor=black@0.4:text='-->3500k<-- 5500k  Wall clock time before encoding\: %{localtime\: %T %Z}'[out1];[in2]drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fontsize=36:fontcolor=yellow:y=150:box=1:boxcolor=black@0.4:text='3500k -->5500k<--  Wall clock time before encoding\: %{localtime\: %T %Z}'[out2]" \
+  -map '[out1]' -map 0:a -c:v h264_nvenc -b:v 3500k -maxrate 4000k -g 12 -no-scenecut 1 -strict_gop 1 -forced-idr 1 -zerolatency 1 \
+  -f hls \
+    -hls_time 0.5 \
+    -hls_list_size 10 \
+    -hls_segment_filename ${DST}/${NAME}-3500-%d.ts \
+    -hls_flags +delete_segments+temp_file \
+    -hls_start_number_source 1 \
+  ${DST}/${NAME}-3500.m3u8 \
+  -map '[out2]' -map 0:a -c:v h264_nvenc -b:v 5500k -maxrate 6000k -g 12 -no-scenecut 1 -strict_gop 1 -forced-idr 1 -zerolatency 1 \
+  -f hls \
+    -hls_time 0.5 \
+    -hls_list_size 10 \
+    -hls_segment_filename ${DST}/${NAME}-5500-%d.ts \
+    -hls_flags +delete_segments+temp_file \
+    -hls_start_number_source 1 \
+  ${DST}/${NAME}-5500.m3u8
+
+User = cdn
+ExecStopPost = /bin/rm -rf $DST/*
+Restart=always
+RestartSec = 10
+
+
+[Install]
+WantedBy = multi-user.target
+
+
+#hls muxer AVOptions:
+#  -start_number      <int64>      E....... set first number in the sequence (from 0 to I64_MAX) (default 0)
+#  -hls_time          <float>      E....... set segment length in seconds (from 0 to FLT_MAX) (default 2)
+#  -hls_init_time     <float>      E....... set segment length in seconds at init list (from 0 to FLT_MAX) (default 0)
+#  -hls_list_size     <int>        E....... set maximum number of playlist entries (from 0 to INT_MAX) (default 5)
+#  -hls_ts_options    <string>     E....... set hls mpegts list of options for the container format used for hls
+#  -hls_vtt_options   <string>     E....... set hls vtt list of options for the container format used for hls
+#  -hls_wrap          <int>        E....... set number after which the index wraps (will be deprecated) (from 0 to INT_MAX) (default 0)
+#  -hls_allow_cache   <int>        E....... explicitly set whether the client MAY (1) or MUST NOT (0) cache media segments (from INT_MIN to INT_MAX) (default -1)
+#  -hls_base_url      <string>     E....... url to prepend to each playlist entry
+#  -hls_segment_filename <string>     E....... filename template for segment files
+#  -hls_segment_size  <int>        E....... maximum size per segment file, (in bytes) (from 0 to INT_MAX) (default 0)
+#  -hls_key_info_file <string>     E....... file with key URI and key file path
+#  -hls_subtitle_path <string>     E....... set path of hls subtitles
+#  -hls_flags         <flags>      E....... set flags affecting HLS playlist and media file generation (default 0)
+#     single_file                  E....... generate a single media file indexed with byte ranges
+#     temp_file                    E....... write segment to temporary file and rename when complete
+#     delete_segments              E....... delete segment files that are no longer part of the playlist
+#     round_durations              E....... round durations in m3u8 to whole numbers
+#     discont_start                E....... start the playlist with a discontinuity tag
+#     omit_endlist                 E....... Do not append an endlist when ending stream
+#     split_by_time                E....... split the hls segment by time which user set by hls_time
+#     append_list                  E....... append the new segments into old hls segment list
+#     program_date_time              E....... add EXT-X-PROGRAM-DATE-TIME
+#     second_level_segment_index              E....... include segment index in segment filenames when use_localtime
+#     second_level_segment_duration              E....... include segment duration in segment filenames when use_localtime
+#     second_level_segment_size              E....... include segment size in segment filenames when use_localtime
+#  -use_localtime     <boolean>    E....... set filename expansion with strftime at segment creation (default false)
+#  -use_localtime_mkdir <boolean>    E....... create last directory component in strftime-generated filename (default false)
+#  -hls_playlist_type <int>        E....... set the HLS playlist type (from 0 to 2) (default 0)
+#     event                        E....... EVENT playlist
+#     vod                          E....... VOD playlist
+#  -method            <string>     E....... set the HTTP method(default: PUT)
+#  -hls_start_number_source <int>        E....... set source of first number in sequence (from 0 to 2) (default generic)
+#     generic                      E....... start_number value (default)
+#     epoch                        E....... seconds since epoch
+#     datetime                     E....... current datetime as YYYYMMDDhhmmss
+
